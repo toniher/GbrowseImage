@@ -1,6 +1,12 @@
+#GbrowseImage
 
-For details, please see:
+## Basic usage
 
-  http://www.mediawiki.org/wiki/Extension:GBrowseImage
+You can default default Gbrowse URL at LocalSettings.php.
 
+	$GLOBALS['wgGbrowseImageUrl'] = "http://gbrowse.mycoplasma.crg.es/cgi-bin/";
+
+Example track:
+
+	{{#GbrowseImage:name=Mympn:12257..12652|source=mympn}}
 

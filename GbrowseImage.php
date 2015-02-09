@@ -27,7 +27,7 @@ call_user_func( function() {
 	$dir = dirname(__FILE__) . '/';
 
 
-	$GLOBALS['wgGBrowseImageUrl'] = "http://heptamer.tamu.edu/fgb2/";
+	$GLOBALS['wgGbrowseImageUrl'] = "http://heptamer.tamu.edu/fgb2/";
 
 	$GLOBALS['wgHooks']['ParserFirstCallInit'][] = 'efGbrowseImageSetup';
 	$GLOBALS['wgExtensionMessagesFiles']['GbrowseImageMagic'] = $dir . '/GbrowseImage.i18n.magic.php';
@@ -88,10 +88,10 @@ class GbrowseImage {
 	}
 
 
-	protected function parseInput(  &$parser, $params  ) {
+	protected static function parseInput(  &$parser, $params  ) {
 		
-		global $wgGBrowseImageUrl;
-		self::$url = $wgGBrowseImageUrl;
+		global $wgGbrowseImageUrl;
+		self::$url = $wgGbrowseImageUrl;
 		
 		$positionalParameters = false;
 
@@ -178,7 +178,7 @@ class GbrowseImage {
 		
 	}
 
-	public function makeLink() {
+	public static function makeLink() {
 
 		wfProfileIn( __METHOD__ );
 
@@ -198,10 +198,10 @@ class GbrowseImage {
 		self::$query['width'] 	= ( isSet(self::$width) && self::$width )
 			? self::$width
 			: 300;
-		self::$query['type'] 	= ( isSet( self::$type) && self::$type )
-			? self::$type
-			: "Genes+Genes:region+ncRNA+ncRNA:region";
-
+		if ( isSet(self::$type) ) {
+			self::$query['type'] = self::$type;
+		}
+		
 		if ( isSet(self::$options) ) {
 			self::$query['options'] = self::$options;
 		}
@@ -226,9 +226,10 @@ class GbrowseImage {
 		if ( isSet(self::$embed) ) {
 			self::$query['embed'] = self::$embed;
 		}
-		if ( isSet(self::$format) ) {
-			self::$query['format'] = self::$format;
-		}
+		
+		self::$query['format'] 	= ( isSet( self::$format) && self::$format )
+			? self::$format
+			: "GD";
 
 		//  check if we're serving up a preset, overwrite any settings with these
 		if ( isSet(self::$preset) && self::$preset ) {
@@ -327,7 +328,7 @@ class GbrowseImage {
 	//
 	// The http_build_query() function will add the first "type=", let's take care of the rest...
 	// 
-	protected function formatTypeParameter() {
+	protected static function formatTypeParameter() {
 		$tracks = explode( '+', self::$query['type'] );
 		$string = "";
 		for ( $i=0, $c=count($tracks); $i<$c; $i++ ) {
@@ -352,7 +353,7 @@ class GbrowseImage {
 		}
 	}
 
-	protected function makeGbrowseImgURL($embed=0) {
+	protected static function makeGbrowseImgURL($embed=0) {
 		
 		if ($embed = 0) {
 			if ( array_key_exists ( "embed" , self::$query ) ) {
@@ -361,18 +362,22 @@ class GbrowseImage {
 		}
 		
 		$base = self::$url.'gbrowse_img/'. self::$source;
-		self::formatTypeParameter();
+		
+		if ( isSet( self::$query['type'] ) ) {
+			self::formatTypeParameter();
+		}
+		
 		$url = $base . '/?' . http_build_query( self::$query );
 		return urldecode($url);
 	}
 
-	protected function makeGbrowseURL() {
+	protected static function makeGbrowseURL() {
 		$base = self::$url. 'gbrowse/' . self::$source;
 		$url = $base . '/?name=' . self::$name;
 		return urldecode($url);
 	}
 
-	protected function makeErrorString( $message ) {
+	protected static function makeErrorString( $message ) {
 		return '<pre style="color:red;">gbrowseImage error:' . "\n  " . $message . '</pre>';
 	}
 
