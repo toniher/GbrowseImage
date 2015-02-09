@@ -3,229 +3,240 @@
 /**
  *	gbrowse_img.php  	           2010-07-19   Daniel Renfro <bluecurio@gmail.com>
  *
- *  This extension will take a set of parameters wrapped in a set of <gbrowseImage>
- *	html-style tags and create a clickable picture.
- *
- *
- *  The options are parsed and then added to a $query variable which is then
- *	transformed into an HTTP query to gbrowse_img.
- *
- *
- *  See also:
- *	  * http://www.wormbase.org/db/seq/gbrowse_img
- *
+ *  Modified into parser function 	2013-2015 	Toni Hermoso Pulido (Toniher)
  */
 
-$wgExtensionCredits['parserhook'][] = array(
-  'author'      => array('[mailto:bluecurio@gmail.com Daniel Renfro]', 'Jim Hu'),
-  'description' => 'gbrowse images',
-  'name'        => 'gbrowseImage',
-  'update'      => '2010-07-19',
-  'url'         => 'http://ecoliwiki.net',
-  'status'      => 'development',
-  'type'        => 'hook',
-  'version'     => '0.2'
-);
-
-//Avoid unstubbing $wgParser on setHook() too early on modern (1.12+) MW versions, as per r35980
-if ( defined( 'MW_SUPPORTS_PARSERFIRSTCALLINIT' ) ) {
-	$wgHooks['ParserFirstCallInit'][] = 'efGbrowseImageSetup';
-} else { // Otherwise do things the old fashioned way
-	$wgExtensionFunctions[] = "efGbrowseImageSetup";
+if ( !defined( 'MEDIAWIKI' ) ) {
+   die( 'This file is a MediaWiki extension, it is not a valid entry point' );
 }
 
+//self executing anonymous function to prevent global scope assumptions
+call_user_func( function() {
+
+	$GLOBALS['wgExtensionCredits']['parserhook'][] = array(
+	  'author'      => array('[mailto:bluecurio@gmail.com Daniel Renfro]', 'Jim Hu', 'Toni Hermoso'),
+	  'description' => 'gbrowse images',
+	  'name'        => 'GrowseImage',
+	  'update'      => '2015-02-09',
+	  'url'         => 'https://www.mediawiki.org/wiki/Extension:GbrowseImage',
+	  'type'        => 'hook',
+	  'version'     => '0.3'
+	);
+
+	# A var to ease the referencing of files
+	$dir = dirname(__FILE__) . '/';
+
+
+	$GLOBALS['gbrowse_url'] = "http://heptamer.tamu.edu/fgb2/";
+
+	$GLOBALS['wgHooks']['ParserFirstCallInit'][] = 'efGbrowseImageSetup';
+	$GLOBALS['wgExtensionMessagesFiles']['GbrowseImageMagic'] = $dir . '/GbrowseImage.i18n.magic.php';
+
+});
+
+
 // hookup the object/method to the tag
-function efGbrowseImageSetup() {
-	global $wgParser;
-	$wgParser->setHook( "gbrowseImage", 'efGbrowseImageRender' );
+function efGbrowseImageSetup ( $parser ) {
+	$parser->setFunctionHook( "gbrowseImage", 'GbrowseImage::execute' );
 	return true;
 }
 
-// have to wrap the object in a function to get MW to execute it properly.
-function efGbrowseImageRender( $input, $args, &$parser, $frame = null ) {
-	$g = new gbrowseImage($input, $args, $parser, $frame ) ;
-	return $g->makeLink();
-}
 
 
-class gbrowseImage {
+class GbrowseImage {
 
 	// create a constant to pad the coordinates
 	const PADDING_LENGTH = 1000;
 
-	// where the gbrowse_img script lives on the web
-    const GBROWSE_IMG = 'http://heptamer.tamu.edu/cgi-bin/gb2/gbrowse_img';
-
-	// where gbrowse lives
-    const GBROWSE = 'http://heptamer.tamu.edu/cgi-bin/gb2/gbrowse';
-
-
-	var $input;						// stuff between the tags
-	var $args;						// xml-style arguments (within the opening tag)
-
 	// various settings
-	var $preset;       				// used to distinguish between different types of preset configuations (presets)
-	var $caption;					// wikitext to use as a caption (probably a transclusion)
-	var $query = array();			// will hold all the options for gbrowse_img, assoc. array
+	private static $url;					// URL of GBrowser
+	private static $preset;       				// used to distinguish between different types of preset configuations (presets)
+	private static $caption;					// wikitext to use as a caption (probably a transclusion)
+	private static $query = array();			// will hold all the options for gbrowse_img, assoc. array
 
 	// gbrowse_img arguments
-	var $source;					// the source of the data, never null
-	var $name;						// genomic landmark or range
-	var $coordinates;    			// an array, order dependent, possibly null
-	var $type;						// tracks to include in image
-	var $width; 				    // desired width of image
-	var $options;					// list of track options (compact, labeled, etc)
-	var $abs;						// display position in absolute coordinates
-	var $add;						// added feature(s) to superimpose on the image
-	var $style;						// stylesheet for additional features
-	var $keystyle;					// where to place the image key
-	var $overview;					// force an overview-style display
-	var $flip;              		// bool, whether to reverse the image or not
-	var $grid;						// turn grid on (1) or off (0)
-	var $embed;						// generate full HTML for image and imagemap for use in an embedded frame
-	var $format;					// format for the image (use "SVG" for scaleable vector graphics)
+	private static $source;					// the source of the data, never null
+	private static $name;						// genomic landmark or range
+	private static $coordinates;    			// an array, order dependent, possibly null
+	private static $type;						// tracks to include in image
+	private static $width; 				    // desired width of image
+	private static $height; 				    // desired height of image
+	private static $options;					// list of track options (compact, labeled, etc)
+	private static $abs;						// display position in absolute coordinates
+	private static $add;						// added feature(s) to superimpose on the image
+	private static $style;						// stylesheet for additional features
+	private static $keystyle;					// where to place the image key
+	private static $overview;					// force an overview-style display
+	private static $flip;              		// bool, whether to reverse the image or not
+	private static $grid;						// turn grid on (1) or off (0)
+	private static $embed;						// generate full HTML for image and imagemap for use in an embedded frame
+	private static $format;					// format for the image (use "SVG" for scaleable vector graphics)
 
+	
 
+	public static function execute ( $parser, $frame, $args ) {
 
-	public function __construct( $input, $args, $parser, $frame = null ) {
-		$this->input = $input;
-		$this->args = $args;
-		// parser not used
-		// frame not used
+		$params = func_get_args();
+		array_shift( $params ); // We already know the $parser ...
+		
+		self::parseInput( $parser, $params );
+
+		$endval = self::makeLink();
+		
+		return array( $endval, 'noparse' => true, 'isHTML' => true );
+
 	}
 
-	protected function parseInput( $input ) {
 
-		// parse the options in $input
-		$input = trim($input);
-		$lines_of_input = explode("\n", $input);
-		foreach ( $lines_of_input as $line ) {
+	protected function parseInput(  &$parser, $params  ) {
+		
+		global $gbrowse_url;
+		self::$url = $gbrowse_url;
+		
+		$positionalParameters = false;
 
-			// key=value pairs
-			if (preg_match('/^([^=]*?)\s*=\s*(.*)$/', $line, $m) ) {
-				$option = trim($m[1]);
-				$value  = trim($m[2]);
-
-				switch ( $option ) {
-					case "source":
-						$this->source = $value;
-						 break;
-					case "name":
-						$this->name = $value;
-						break;
-					case "width":
-						// get the integer value of whatever came in
-                 		$this->width = intval( $value );
-						break;
-					case "type":
-						$this->type = $value;
-						break;
-					case 'options':
-						$this->options = $value;
-						break;
-					case 'abs':
-						$this->abs = $value;
-						break;
-					case 'add':
-						$this->add = $value;
-						break;
-					case 'style':
-						$this->style = $value;
-						break;
-					case 'keystyle':
-						$this->keystyle = $value;
-						break;
-					case 'overview':
-						$this->overview = $value;
-						break;
-					case 'grid':
-						$this->grid = $value;
-						break;
-					case 'format':
-						$this->format = $value;
-						break;
-					case "embed":
-						$this->embed = $value;
-						break;
-					case "flip":
-						// if there is anything that evaluates to true, use it
-						if ( $value ) {
-							$this->flip = true;
-						}
-						break;
-					case "preset":
-                    	$this->preset = $value;
-						 break;
-					case 'caption':
-						// could be problematic because of multiple lines....oh well.
-						$this->caption = $value;
-						break;
-				}
+		foreach ( $params as $i => $param ) {
+	
+		
+			$elements = explode('=', $param, 2 );
+	
+			// set param_name and value
+			if ( count( $elements ) > 1 && !$positionalParameters ) {
+				$param_name = trim( $elements[0] );
+				// parse (and sanitize) parameter values
+				$value = trim( $parser->recursiveTagParse( $elements[1] ) );
+			} else {
+				$param_name = null;
+	
+				// parse (and sanitize) parameter values
+				$value = trim( $parser->recursiveTagParse( $param ) );
+			}
+	
+			switch ( $param_name ) {
+				case "url":
+					self::$url = $value;
+					break;
+				case "source":
+					self::$source = $value;
+					break;
+				case "name":
+					self::$name = $value;
+					break;
+				case "width":
+					// get the integer value of whatever came in
+					self::$width = intval( $value );
+					break;
+				case "height":
+					// get the integer value of whatever came in
+					self::$height = intval( $value );
+					break;
+				case "type":
+					self::$type = $value;
+					break;
+				case 'options':
+					self::$options = $value;
+					break;
+				case 'abs':
+					self::$abs = $value;
+					break;
+				case 'add':
+					self::$add = $value;
+					break;
+				case 'style':
+					self::$style = $value;
+					break;
+				case 'keystyle':
+					self::$keystyle = $value;
+					break;
+				case 'overview':
+					self::$overview = $value;
+					break;
+				case 'grid':
+					self::$grid = $value;
+					break;
+				case 'format':
+					self::$format = $value;
+					break;
+				case "embed":
+					self::$embed = $value;
+					break;
+				case "flip":
+					// if there is anything that evaluates to true, use it
+					if ( $value ) {
+						self::$flip = true;
+					}
+					break;
+				case "preset":
+					self::$preset = $value;
+					break;
+				case 'caption':
+					// could be problematic because of multiple lines....oh well.
+					self::$caption = $value;
+					break;
 			}
 		}
-	}	// done parsing parameters
+		
+	}
 
 	public function makeLink() {
 
 		wfProfileIn( __METHOD__ );
 
-		// get the options from between the tags
-		$this->parseInput( $this->input );
-
 		// check for required parameters
-		if ( !isSet($this->source) ) {
+		if ( !isSet(self::$source) ) {
 			trigger_error( 'no source set, cannot continue', E_USER_WARNING );
-			return $this->makeErrorString( 'No \'source\' parameter set. Cannot make image.' );
+			return self::makeErrorString( 'No \'source\' parameter set. Cannot make image.' );
 		}
-		if ( !isSet($this->name) ) {
+		if ( !isSet(self::$name) ) {
 			trigger_error( 'no name set, cannot continue', E_USER_WARNING );
-			return $this->makeErrorString( 'No \'name\' parameter set. Cannot make image.' );
+			return self::makeErrorString( 'No \'name\' parameter set. Cannot make image.' );
 		}
 
 		// set up the basic/default options for gbrowse_img into an array
-		$this->query['name'] = $this->name;
-		$this->query['width'] 	= ( isSet($this->width) && $this->width )
-			? $this->width
+		self::$query['name'] = self::$name;
+				
+		self::$query['width'] 	= ( isSet(self::$width) && self::$width )
+			? self::$width
 			: 300;
-		$this->query['type'] 	= ( isSet($this->type) && $this->type )
-			? $this->type
+		self::$query['type'] 	= ( isSet( self::$type) && self::$type )
+			? self::$type
 			: "Genes+Genes:region+ncRNA+ncRNA:region";
 
-		if ( isSet($this->options) ) {
-			$this->query['options'] = $this->options;
+		if ( isSet(self::$options) ) {
+			self::$query['options'] = self::$options;
 		}
-		if ( isSet($this->abs) ) {
-			$this->query['abs'] = $this->abs;
+		if ( isSet(self::$abs) ) {
+			self::$query['abs'] = self::$abs;
 		}
-		if ( isSet($this->add) ) {
-			$this->query['add'] = $this->add;
+		if ( isSet(self::$add) ) {
+			self::$query['add'] = self::$add;
 		}
-		if ( isSet($this->style) ) {
-			$this->query['style'] = $this->style;
+		if ( isSet(self::$style) ) {
+			self::$query['style'] = self::$style;
 		}
-		if ( isSet($this->keystyle) ) {
-			$this->query['keystyle'] = $this->keystyle;
+		if ( isSet(self::$keystyle) ) {
+			self::$query['keystyle'] = self::$keystyle;
 		}
-		if ( isSet($this->flip) ) {
-			$this->query['flip'] = $this->flip;
+		if ( isSet(self::$flip) ) {
+			self::$query['flip'] = self::$flip;
 		}
-		if ( isSet($this->grid) ) {
-			$this->query['grid'] = $this->grid;
+		if ( isSet(self::$grid) ) {
+			self::$query['grid'] = self::$grid;
 		}
-		if ( isSet($this->embed) ) {
-			$this->query['embed'] = $this->embed;
+		if ( isSet(self::$embed) ) {
+			self::$query['embed'] = self::$embed;
 		}
-		if ( isSet($this->format) ) {
-			$this->query['format'] = $this->format;
+		if ( isSet(self::$format) ) {
+			self::$query['format'] = self::$format;
 		}
 
 		//  check if we're serving up a preset, overwrite any settings with these
-		if ( isSet($this->preset) && $this->preset ) {
-			switch ( $this->preset ) {
+		if ( isSet(self::$preset) && self::$preset ) {
+			switch ( self::$preset ) {
 			    case "GeneLocation":
 			    	// pad the figure with a set amount on 5' and 3' ends
 			    	$padding_amount = 1000; //  1kb nt
-			 		list($landmark, $coordA, $coordB) = $this->parseLandmark( $this->name );
+			 		list($landmark, $coordA, $coordB) = self::parseLandmark( self::$name );
 					// don't go further than the origin on the 5' side
 					if ( $coordA - $padding_amount < 0 ) {
 						$coordA = 0;
@@ -235,57 +246,77 @@ class gbrowseImage {
 					}
 					$coordB += $padding_amount;
 					// reconstruct the name parameter
-					$this->query['name'] = sprintf('%s:%d..%d', $landmark, $coordA, $coordB );
+					self::$query['name'] = sprintf('%s:%d..%d', $landmark, $coordA, $coordB );
 			        break;
 			    case "Nterminus":
 			    	// we have to turn flip on/off explicitly in the parameters.
 			    	// GBrowse allows low->high coordinates to be on the minus strand.
 			    	// i.e. ( high->low != 'minus strand' )
-			    	$this->query['name'] = $this->name;
-			    	$this->query['type'] = 'Gene+DNA_+Protein';
-			    	$this->query['width'] = 400;
+			    	self::$query['name'] = self::$name;
+			    	self::$query['type'] = 'Gene+DNA_+Protein';
+			    	self::$query['width'] = 400;
 			    	break;
 			    case 'SubtilisQuickView_xy':
 					// This is for the new quickview on the subtiliswiki
-					$this->query['name'] = $this->name;
-					$this->query['type'] =  'Rasmussen_xy';
-					$this->query['wdith'] = 500;
+					self::$query['name'] = self::$name;
+					self::$query['type'] =  'Rasmussen_xy';
+					self::$query['wdith'] = 500;
 					break;
 				case 'SubtilisQuickView_xy_LB_genes':
-					$this->query['name'] = $this->name;
-					$this->query['type'] =  'Genes+Rasmussen_xy_LB';
-					$this->query['wdith'] = 500;
+					self::$query['name'] =self:: $name;
+					self::$query['type'] =  'Genes+Rasmussen_xy_LB';
+					self::$query['wdith'] = 500;
 					break;
 	            case 'SubtilisQuickView_density':
 					// This is for the new quickview on the subtiliswiki
-					$this->query['name'] = $this->name;
-					$this->query['type'] =  'Rasmussen_density';
-					$this->query['wdith'] = 500;
+					self::$query['name'] = self::$name;
+					self::$query['type'] =  'Rasmussen_density';
+					self::$query['wdith'] = 500;
 					break;
 				 case 'SubtilisQuickView_genes':
 					// This is for the new quickview on the subtiliswiki
-					$this->query['name'] = $this->name;
-					$this->query['type'] =  'Genes';
-					$this->query['wdith'] = 500;
+					self::$query['name'] = self::$name;
+					self::$query['type'] =  'Genes';
+					self::$query['wdith'] = 500;
 					break;
 	            default:
 			    	// do nothing.
 			        break;
 			}
 		}		// make the HTML
-		$html = '<a href="' . $this->makeGbrowseURL() . '" target="_blank">
-		            <img src="' . $this->makeGbrowseImgURL() . '" alt="' . $this->makeGbrowseURL() . '" />
+		
+		
+		if ( isSet(self::$embed) && is_numeric(self::$embed) && self::$embed > 0 ) {
+		
+			$height = 250;
+			if ( isSet(self::$height) && is_numeric(self::$height) && self::$height > 0 ) {
+				$height = self::$height;
+			}
+			
+			$width = self::$query['width'];
+			
+		
+			$html = '<iframe src="'.self::makeGbrowseImgURL($embed=1).'" width="'.$width.'" height="'.$height.'" >
+		            <img src="' . self::makeGbrowseImgURL() . '" alt="' . self::makeGbrowseURL() . '" />
+		        </iframe>';
+			
+		}
+		else {	
+		
+			$html = '<a href="' . self::makeGbrowseURL() . '" target="_blank">
+		            <img src="' . self::makeGbrowseImgURL() . '" alt="' . self::makeGbrowseURL() . '" />
 		        </a>';
-
+		}
+		
 		// for debugging
 		#$html .= '<br />' . htmlentities($this->makeGbrowseImgURL());
 
-		$html .= ( isSet($this->caption) && $this->caption )
-			? "\n" . $this->caption
+		$html .= ( isSet(self::$caption) && self::$caption )
+			? "\n" . self::$caption
 			: "";
 
 		wfProfileOut( __METHOD__ );
-
+		
 		return $html . "\n";
 	}
 	
@@ -297,7 +328,7 @@ class gbrowseImage {
 	// The http_build_query() function will add the first "type=", let's take care of the rest...
 	// 
 	protected function formatTypeParameter() {
-		$tracks = explode( '+', $this->query['type'] );
+		$tracks = explode( '+', self::$query['type'] );
 		$string = "";
 		for ( $i=0, $c=count($tracks); $i<$c; $i++ ) {
 			if ( $i != 0 ) {
@@ -305,7 +336,7 @@ class gbrowseImage {
 			}
 			$string .= $tracks[$i];
 		}
-		$this->query['type'] = $string;
+		self::$query['type'] = $string;
 			
 	}
 	
@@ -321,16 +352,23 @@ class gbrowseImage {
 		}
 	}
 
-	protected function makeGbrowseImgURL() {
-		$base = self::GBROWSE_IMG . '/' . $this->source;
-		$this->formatTypeParameter();
-		$url = $base . '/?' . http_build_query( $this->query );
+	protected function makeGbrowseImgURL($embed=0) {
+		
+		if ($embed = 0) {
+			if ( array_key_exists ( "embed" , self::$query ) ) {
+				unset(self::$query["embed"]);
+			}
+		}
+		
+		$base = self::$url.'gbrowse_img/'. self::$source;
+		self::formatTypeParameter();
+		$url = $base . '/?' . http_build_query( self::$query );
 		return urldecode($url);
 	}
 
 	protected function makeGbrowseURL() {
-		$base = self::GBROWSE . '/' . $this->source;
-		$url = $base . '/?name=' . $this->name;
+		$base = self::$url. 'gbrowse/' . self::$source;
+		$url = $base . '/?name=' . self::$name;
 		return urldecode($url);
 	}
 
