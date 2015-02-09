@@ -27,7 +27,7 @@ call_user_func( function() {
 	$dir = dirname(__FILE__) . '/';
 
 
-	$GLOBALS['gbrowse_url'] = "http://heptamer.tamu.edu/fgb2/";
+	$GLOBALS['wgGBrowseImageUrl'] = "http://heptamer.tamu.edu/fgb2/";
 
 	$GLOBALS['wgHooks']['ParserFirstCallInit'][] = 'efGbrowseImageSetup';
 	$GLOBALS['wgExtensionMessagesFiles']['GbrowseImageMagic'] = $dir . '/GbrowseImage.i18n.magic.php';
@@ -90,8 +90,8 @@ class GbrowseImage {
 
 	protected function parseInput(  &$parser, $params  ) {
 		
-		global $gbrowse_url;
-		self::$url = $gbrowse_url;
+		global $wgGBrowseImageUrl;
+		self::$url = $wgGBrowseImageUrl;
 		
 		$positionalParameters = false;
 
