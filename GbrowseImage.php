@@ -27,7 +27,7 @@ call_user_func( function() {
 	$dir = dirname(__FILE__) . '/';
 
 
-	$GLOBALS['wgGBrowseImageUrl'] = "http://heptamer.tamu.edu/fgb2/";
+	$GLOBALS['wgGbrowseImageUrl'] = "http://heptamer.tamu.edu/fgb2/";
 
 	$GLOBALS['wgHooks']['ParserFirstCallInit'][] = 'efGbrowseImageSetup';
 	$GLOBALS['wgExtensionMessagesFiles']['GbrowseImageMagic'] = $dir . '/GbrowseImage.i18n.magic.php';
@@ -88,10 +88,10 @@ class GbrowseImage {
 	}
 
 
-	protected function parseInput(  &$parser, $params  ) {
+	protected static function parseInput(  &$parser, $params  ) {
 		
-		global $wgGBrowseImageUrl;
-		self::$url = $wgGBrowseImageUrl;
+		global $wgGbrowseImageUrl;
+		self::$url = $wgGbrowseImageUrl;
 		
 		$positionalParameters = false;
 
@@ -178,7 +178,7 @@ class GbrowseImage {
 		
 	}
 
-	public function makeLink() {
+	public static function makeLink() {
 
 		wfProfileIn( __METHOD__ );
 
@@ -327,7 +327,7 @@ class GbrowseImage {
 	//
 	// The http_build_query() function will add the first "type=", let's take care of the rest...
 	// 
-	protected function formatTypeParameter() {
+	protected static function formatTypeParameter() {
 		$tracks = explode( '+', self::$query['type'] );
 		$string = "";
 		for ( $i=0, $c=count($tracks); $i<$c; $i++ ) {
@@ -352,7 +352,7 @@ class GbrowseImage {
 		}
 	}
 
-	protected function makeGbrowseImgURL($embed=0) {
+	protected static function makeGbrowseImgURL($embed=0) {
 		
 		if ($embed = 0) {
 			if ( array_key_exists ( "embed" , self::$query ) ) {
@@ -366,13 +366,13 @@ class GbrowseImage {
 		return urldecode($url);
 	}
 
-	protected function makeGbrowseURL() {
+	protected static function makeGbrowseURL() {
 		$base = self::$url. 'gbrowse/' . self::$source;
 		$url = $base . '/?name=' . self::$name;
 		return urldecode($url);
 	}
 
-	protected function makeErrorString( $message ) {
+	protected static function makeErrorString( $message ) {
 		return '<pre style="color:red;">gbrowseImage error:' . "\n  " . $message . '</pre>';
 	}
 
